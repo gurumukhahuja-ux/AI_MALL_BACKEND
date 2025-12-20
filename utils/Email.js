@@ -1,5 +1,6 @@
 import { Verification_Email_Template, Welcome_Email_Template } from "./EmailTemplate.js";
 import { resend, transporter } from "./Email.config.js";
+import { marketPlace } from "../consts.js";
 //  console.log(transporter);
 
 export const sendVerificationEmail = async (email, name, verificationCode) => {
@@ -21,7 +22,7 @@ export const welcomeEmail = async (name, email) => {
     from: `AI-MALL <${process.env.EMAIL}>`,
     to: [email],
     subject: `Welcome ${name}`,
-    html: Welcome_Email_Template.replace("{name}", name),
+    html: Welcome_Email_Template.replace("{name}", name).replace("{dashboardUrl}",marketPlace),
   });
 };
 
