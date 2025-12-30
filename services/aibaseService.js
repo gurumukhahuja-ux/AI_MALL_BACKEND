@@ -1,5 +1,15 @@
 import { generativeModel } from '../config/gemini.js';
 import AibaseKnowledge from '../models/AibaseKnowledge.js';
+import { pipeline } from '@xenova/transformers';
+
+// Initialize Embedding Pipeline
+let embedder;
+const getEmbedder = async () => {
+    if (!embedder) {
+        embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+    }
+    return embedder;
+};
 
 // Initialize Gemini Chat Model using existing config
 const model = generativeModel;
@@ -35,18 +45,32 @@ const splitText = (text, chunkSize = 1500, overlap = 300) => {
 
 
 // Store document
-export const storeDocument = async (text) => {
+export const storeDocument = async (text, filename = "unknown") => {
     try {
         const chunks = splitText(text);
         console.log(`[AIBASE] Split into ${chunks.length} chunks.`);
 
-        // Store chunks in memory
-        chunks.forEach(chunk => {
+        const extractor = await getEmbedder();
+
+        for (const chunk of chunks) {
+            // Generate embedding
+            const output = await extractor(chunk, { pooling: 'mean', normalize: true });
+            const embedding = Array.from(output.data);
+
+            // Store in MongoDB
+            await AibaseKnowledge.create({
+                filename: filename,
+                content: chunk,
+                embedding: embedding
+            });
+
+            // Fallback: Also store in memory for current session
             documentStore.push({
                 content: chunk,
+                embedding: embedding,
                 timestamp: Date.now()
             });
-        });
+        }
 
         console.log(`[AIBASE] Total documents in store: ${documentStore.length}`);
         return true;
@@ -86,11 +110,38 @@ export const chat = async (message) => {
         }
 
         // Search for relevant documents
-        let retrievedDocs = searchDocuments(message, 5);
+        let retrievedDocs = [];
+
+        try {
+            const extractor = await getEmbedder();
+            const output = await extractor(message, { pooling: 'mean', normalize: true });
+            const queryVector = Array.from(output.data);
+
+            // Try MongoDB Vector Search
+            retrievedDocs = await AibaseKnowledge.aggregate([
+                {
+                    $vectorSearch: {
+                        index: "default",
+                        path: "embedding",
+                        queryVector: queryVector,
+                        numCandidates: 100,
+                        limit: 5
+                    }
+                }
+            ]);
+
+            if (retrievedDocs.length > 0) {
+                console.log(`[AIBASE] Found ${retrievedDocs.length} matches via Vector Search.`);
+            }
+        } catch (vectorError) {
+            console.error(`[AIBASE] Vector Search Error: ${vectorError.message}`);
+            // Fallback to keyword search
+            retrievedDocs = searchDocuments(message, 5);
+        }
 
         // Fallback: If no matches but we have documents, take the most recent ones
         if (retrievedDocs.length === 0 && documentStore.length > 0) {
-            console.log(`[AIBASE] No keyword matches. Using most recent docs as context.`);
+            console.log(`[AIBASE] No search matches. Using recent docs as context.`);
             retrievedDocs = documentStore.slice(-3);
         }
 
@@ -100,7 +151,7 @@ export const chat = async (message) => {
             contextText = retrievedDocs
                 .map(doc => doc.content)
                 .join("\n\n---\n\n");
-            console.log(`[AIBASE] Using ${retrievedDocs.length} chunks as context.`);
+            console.log(`[AIBASE] Using context from ${retrievedDocs.length} chunks.`);
         } else {
             console.log(`[AIBASE] No documents available for context.`);
             contextText = "No uploaded documents found.";
@@ -158,12 +209,12 @@ export const initializeFromDB = async () => {
             documentStore = []; // Reset
             for (const doc of docs) {
                 if (!doc.content) continue;
-                const chunks = splitText(doc.content);
-                chunks.forEach(chunk => {
-                    documentStore.push({
-                        content: chunk,
-                        timestamp: doc.createdAt
-                    });
+
+                // Load into memory store
+                documentStore.push({
+                    content: doc.content,
+                    embedding: doc.embedding,
+                    timestamp: doc.createdAt
                 });
             }
             console.log(`[AIBASE] Loaded ${docs.length} documents into ${documentStore.length} chunks.`);
