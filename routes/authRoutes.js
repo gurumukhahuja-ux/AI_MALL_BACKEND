@@ -19,7 +19,7 @@ router.get("/signup", (req, res) => {
 // ====================== SIGNUP =======================
 router.post("/signup", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role, companyName } = req.body;
 
     // Check user exists
     const existingUser = await UserModel.findOne({ email });
@@ -40,25 +40,31 @@ router.post("/signup", async (req, res) => {
       email,
       password: hashedPassword,
       verificationCode,
+      role: role || 'user',
+      companyName: companyName || ''
     });
 
     // Generate token cookie
     const token = generateTokenAndSetCookies(res, newUser._id, newUser.email, newUser.name);
 
-
-    // Send OTP email
-    await sendVerificationEmail(newUser.email, newUser.name, newUser.verificationCode);
+    // Try to send OTP email (non-blocking)
+    try {
+      await sendVerificationEmail(newUser.email, newUser.name, newUser.verificationCode);
+    } catch (emailErr) {
+      console.warn('Email sending failed (non-critical):', emailErr.message);
+    }
 
     res.status(201).json({
       id: newUser._id,
       name: newUser.name,
       email: newUser.email,
-      message: "Verification code sent successfully",
+      role: newUser.role,
+      message: "Account created successfully",
       token: token,
     });
   } catch (err) {
     console.error("Signup Error:", err);
-    res.status(500).json({ error: "Server error during signup" });
+    res.status(500).json({ error: "Server error during signup", details: err.message });
   }
 });
 

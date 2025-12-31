@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: "user"
     },
+    companyName: {
+        type: String,
+        default: ""
+    },
     chatSessions: [{ type: mongoose.Schema.Types.ObjectId, ref: "ChatSession" }],
     verificationCode: Number
 

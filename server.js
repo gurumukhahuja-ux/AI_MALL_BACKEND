@@ -1,4 +1,5 @@
 import express, { urlencoded } from "express";
+console.log('--- SERVER STARTING (LINE 2) ---');
 import dotenv from "dotenv";
 import 'dotenv/config';
 import cors from "cors";
@@ -22,8 +23,8 @@ const app = express();
 const PORT = process.env.PORT
 // Connect to Database
 connectDB().then(() => {
-  console.log("Database connected, initializing services...");
-  aibaseService.initializeFromDB();
+  console.log("Database connected...");
+  // aibaseService.initializeFromDB();
 });
 
 
@@ -86,3 +87,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`AI-Mall Backend running on  http://localhost:${PORT}`);
 });
+
+// Force restart for env update

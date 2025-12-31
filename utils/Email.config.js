@@ -18,5 +18,10 @@ export const transporter = nodemailer.createTransport({
 });
 
 
-export const resend = new Resend(process.env.RESEND_API_KEY);
+const resendKey = process.env.RESEND_API_KEY;
+export const resend = resendKey ? new Resend(resendKey) : {
+  emails: {
+    send: async () => ({ data: { id: 'mock-id' }, error: null })
+  }
+};
 
