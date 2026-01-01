@@ -1,41 +1,39 @@
-import logger from '../utils/logger.js';
-import path from 'path';
-import stream from 'stream';
-import util from 'util';
-import pdf from 'pdf-parse';
-import Knowledge from '../models/Knowledge.model.js';
-import * as aiService from '../services/aibaseService.js';
-import { uploadToCloudinary } from '../services/cloudinary.service.js';
-import mammoth from 'mammoth';
-import xlsx from 'xlsx';
-import officeParser from 'officeparser';
-import Tesseract from 'tesseract.js';
-
+const fs = require('fs');
+const logger = require('../utils/logger');
+const path = require('path');
+const os = require('os');
+const stream = require('stream');
+const util = require('util');
+const pdf = require('pdf-parse');
+const Knowledge = require('../models/Knowledge.model');
+const aiService = require('../services/ai.service');
+const axios = require('axios');
 const pipeline = util.promisify(stream.pipeline);
+const { uploadToCloudinary, uploadFileToCloudinary } = require('../services/cloudinary.service');
 
 // @desc    Upload a document
 // @route   POST /api/knowledge/upload
 // @access  Public
-export const uploadDocument = async (req, res) => {
+exports.uploadDocument = async (req, res) => {
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
         }
 
-        const fileBuffer = req.file.buffer;
-        const originalName = req.file.originalname;
-        const mimeType = req.file.mimetype;
-        const fileSize = req.file.size;
+        const uploadedFile = req.file; // Multer (MemoryStorage) puts file in req.file with .buffer
+        const originalName = uploadedFile.originalname;
+        const mimeType = uploadedFile.mimetype;
+        const fileSize = uploadedFile.size;
 
-        logger.info(`Processing file in memory: ${originalName} (${fileSize} bytes)`);
+        logger.info(`Processing file from memory/buffer: ${originalName} (${fileSize} bytes)`);
 
         let textContent = '';
         let cloudinaryResult = null;
 
-        // 1. Process Content (In-Memory)
+        // 1. Process Content (From Buffer)
         if (mimeType === 'application/pdf') {
             try {
-                const data = await pdf(fileBuffer);
+                const data = await pdf(uploadedFile.buffer);
                 textContent = data.text;
                 logger.info(`Parsed PDF with ${data.numpages} pages`);
             } catch (pdfError) {
@@ -44,7 +42,8 @@ export const uploadDocument = async (req, res) => {
             }
         } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
             try {
-                const result = await mammoth.extractRawText({ buffer: fileBuffer });
+                const mammoth = require('mammoth');
+                const result = await mammoth.extractRawText({ buffer: uploadedFile.buffer });
                 textContent = result.value;
                 logger.info(`Parsed DOCX: ${textContent.length} chars.`);
             } catch (docxError) {
@@ -53,32 +52,30 @@ export const uploadDocument = async (req, res) => {
             }
         } else if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
             try {
-                const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
-                const sheetNames = workbook.SheetNames;
-                textContent = sheetNames.map(name => {
-                    const sheet = workbook.Sheets[name];
-                    return xlsx.utils.sheet_to_text(sheet);
+                const xlsx = require('xlsx');
+                const workbook = xlsx.read(uploadedFile.buffer, { type: 'buffer' });
+                textContent = workbook.SheetNames.map(name => {
+                    return xlsx.utils.sheet_to_text(workbook.Sheets[name]);
                 }).join('\n\n');
-                logger.info(`Parsed Excel: ${sheetNames.length} sheets.`);
+                logger.info(`Parsed Excel.`);
             } catch (xlsxError) {
                 logger.error(`Excel Parsing Failed: ${xlsxError.message}`);
                 textContent = "Excel parsing failed.";
             }
         } else if (mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
             try {
-                const data = await officeParser.parse(fileBuffer);
-                // officeparser returns text directly in modern versions or requires specific handling.
-                // Assuming it returns string or object with string.
-                textContent = typeof data === 'string' ? data : JSON.stringify(data);
-                logger.info(`Parsed PPTX. Length: ${textContent.length}`);
+                const officeParser = require('officeparser');
+                textContent = await officeParser.parse(uploadedFile.buffer);
+                logger.info(`Parsed PPTX.`);
             } catch (pptError) {
                 logger.error(`PPTX Parsing Failed: ${pptError.message}`);
                 textContent = "PPTX parsing failed.";
             }
         } else if (mimeType.startsWith('image/')) {
             try {
+                const Tesseract = require('tesseract.js');
                 logger.info(`Starting OCR for Image...`);
-                const { data: { text } } = await Tesseract.recognize(fileBuffer, 'eng');
+                const { data: { text } } = await Tesseract.recognize(uploadedFile.buffer, 'eng');
                 textContent = text;
                 logger.info(`OCR Complete. Extracted ${textContent.length} chars.`);
             } catch (ocrError) {
@@ -86,15 +83,16 @@ export const uploadDocument = async (req, res) => {
                 textContent = "Image text extraction failed.";
             }
         } else if (mimeType === 'text/plain') {
-            textContent = fileBuffer.toString('utf8');
+            textContent = uploadedFile.buffer.toString('utf8');
         } else {
             logger.info('File type verification: Non-text file (Image/Video/Other). Skipping text extraction.');
         }
 
-        // 2. Upload to Cloudinary
+        // 2. Upload to Cloudinary (Buffer Stream)
         try {
             logger.info("Uploading to Cloudinary...");
-            cloudinaryResult = await uploadToCloudinary(fileBuffer, {
+            // Use uploadToCloudinary (services/cloudinary.service.js) which handles buffers
+            cloudinaryResult = await uploadToCloudinary(uploadedFile.buffer, {
                 resource_type: 'auto',
                 public_id: originalName.split('.')[0] + '-' + Date.now()
             });
@@ -106,7 +104,6 @@ export const uploadDocument = async (req, res) => {
 
         // 3. Store in Node.js AI Service (Only if text content available)
         if (textContent) {
-            // Store in Atlas Vector Search
             const success = await aiService.storeDocument(textContent);
             if (success) {
                 logger.info("Document text stored in Atlas Vector Store");
@@ -137,7 +134,7 @@ export const uploadDocument = async (req, res) => {
                 url: cloudinaryResult.secure_url,
                 mimetype: mimeType,
                 size: fileSize,
-                parsedTextLength: textContent.length,
+                parsedTextLength: textContent ? textContent.length : 0,
                 ragProcessed: !!textContent && textContent.length > 0
             }
         });
@@ -151,7 +148,7 @@ export const uploadDocument = async (req, res) => {
 // @desc    Get all uploaded documents
 // @route   GET /api/knowledge/documents
 // @access  Public
-export const getDocuments = async (req, res) => {
+exports.getDocuments = async (req, res) => {
     try {
         const documents = await Knowledge.find({}, 'filename uploadDate');
         res.status(200).json({
@@ -167,7 +164,7 @@ export const getDocuments = async (req, res) => {
 // @desc    Delete a document
 // @route   DELETE /api/knowledge/:id
 // @access  Public
-export const deleteDocument = async (req, res) => {
+exports.deleteDocument = async (req, res) => {
     try {
         const document = await Knowledge.findById(req.params.id);
         if (!document) {

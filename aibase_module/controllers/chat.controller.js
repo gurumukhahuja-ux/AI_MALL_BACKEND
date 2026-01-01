@@ -1,18 +1,14 @@
-import * as aiService from '../services/aibaseService.js';
-import logger from '../utils/logger.js';
-import Conversation from '../models/Conversation.model.js';
-import { uploadToCloudinary } from '../services/cloudinary.service.js';
-import pdf from 'pdf-parse';
-import mammoth from 'mammoth';
-import xlsx from 'xlsx';
-import officeParser from 'officeparser';
-import Tesseract from 'tesseract.js';
-
+const aiService = require('../services/ai.service');
+const logger = require('../utils/logger');
+const Conversation = require('../models/Conversation.model');
 
 // @desc    Chat with AI
 // @route   POST /api/chat
 // @access  Public (for now)
-export const chat = async (req, res, next) => {
+// @desc    Chat with AI
+// @route   POST /api/chat
+// @access  Public (for now)
+exports.chat = async (req, res, next) => {
     try {
         const { message, conversationId, activeDocContent } = req.body;
 
@@ -55,7 +51,7 @@ export const chat = async (req, res, next) => {
 // @desc    Upload attachment for Chat (Temporary Context)
 // @route   POST /api/chat/upload
 // @access  Public
-export const uploadAttachment = async (req, res, next) => {
+exports.uploadAttachment = async (req, res, next) => {
     try {
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -68,6 +64,7 @@ export const uploadAttachment = async (req, res, next) => {
         // Extract Text for Immediate Context
         if (mimeType === 'application/pdf') {
             try {
+                const pdf = require('pdf-parse');
                 const data = await pdf(fileBuffer);
                 parsedText = data.text;
                 logger.info(`[Chat Upload] Parsed PDF: ${data.numpages} pages.`);
@@ -76,6 +73,7 @@ export const uploadAttachment = async (req, res, next) => {
             }
         } else if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
             try {
+                const mammoth = require('mammoth');
                 const result = await mammoth.extractRawText({ buffer: fileBuffer });
                 parsedText = result.value;
                 logger.info(`[Chat Upload] Parsed DOCX: ${parsedText.length} chars.`);
@@ -84,6 +82,7 @@ export const uploadAttachment = async (req, res, next) => {
             }
         } else if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
             try {
+                const xlsx = require('xlsx');
                 const workbook = xlsx.read(fileBuffer, { type: 'buffer' });
                 parsedText = workbook.SheetNames.map(name => {
                     return xlsx.utils.sheet_to_text(workbook.Sheets[name]);
@@ -94,6 +93,7 @@ export const uploadAttachment = async (req, res, next) => {
             }
         } else if (mimeType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
             try {
+                const officeParser = require('officeparser');
                 parsedText = await officeParser.parse(fileBuffer);
                 logger.info(`[Chat Upload] Parsed PPTX.`);
             } catch (e) {
@@ -101,6 +101,7 @@ export const uploadAttachment = async (req, res, next) => {
             }
         } else if (mimeType.startsWith('image/')) {
             try {
+                const Tesseract = require('tesseract.js');
                 logger.info(`[Chat Upload] Starting OCR...`);
                 const { data: { text } } = await Tesseract.recognize(fileBuffer, 'eng');
                 parsedText = text;
@@ -113,12 +114,14 @@ export const uploadAttachment = async (req, res, next) => {
         }
 
         // Helper to upload to cloudinary for visual reference (image/pdf link)
+        const { uploadToCloudinary } = require('../services/cloudinary.service');
         const cloudResult = await uploadToCloudinary(fileBuffer, {
             resource_type: 'auto',
             public_id: 'chat_upload_' + Date.now()
         });
 
         // Return text so frontend can send it back as context
+        logger.info(`[Chat Upload] Success. Extracted Text Length: ${parsedText ? parsedText.length : 0} chars.`);
         res.status(200).json({
             success: true,
             data: {
@@ -138,7 +141,7 @@ export const uploadAttachment = async (req, res, next) => {
 // @desc    Get all conversations
 // @route   GET /api/chat/history
 // @access  Public
-export const getHistory = async (req, res, next) => {
+exports.getHistory = async (req, res, next) => {
     try {
         const query = { userId: 'admin' };
 
@@ -166,7 +169,7 @@ export const getHistory = async (req, res, next) => {
 // @desc    Get specific conversation
 // @route   GET /api/chat/:id
 // @access  Public
-export const getConversation = async (req, res, next) => {
+exports.getConversation = async (req, res, next) => {
     try {
         const conversation = await Conversation.findById(req.params.id);
         if (!conversation) {
@@ -184,7 +187,7 @@ export const getConversation = async (req, res, next) => {
 // @desc    Delete a conversation
 // @route   DELETE /api/chat/:id
 // @access  Public
-export const deleteConversation = async (req, res, next) => {
+exports.deleteConversation = async (req, res, next) => {
     try {
         const conversation = await Conversation.findById(req.params.id);
         if (!conversation) {
@@ -205,7 +208,7 @@ export const deleteConversation = async (req, res, next) => {
 // @desc    Clear all history
 // @route   DELETE /api/chat/history
 // @access  Public
-export const clearHistory = async (req, res, next) => {
+exports.clearHistory = async (req, res, next) => {
     try {
         await Conversation.deleteMany({ userId: 'admin' }); // Clear for current user
 
@@ -217,3 +220,4 @@ export const clearHistory = async (req, res, next) => {
         next(error);
     }
 };
+

@@ -1,5 +1,5 @@
 const { MongoDBAtlasVectorSearch } = require("@langchain/mongodb");
-const { HuggingFaceTransformersEmbeddings } = require("@langchain/community/embeddings/hf_transformers");
+const { HuggingFaceTransformersEmbeddings } = require("@langchain/community/embeddings/huggingface_transformers");
 const { RecursiveCharacterTextSplitter } = require("@langchain/textsplitters");
 const mongoose = require("mongoose");
 const logger = require("../utils/logger");
@@ -84,17 +84,24 @@ exports.chat = async (message, activeDocContent = null) => {
             message = String(message || "");
         }
 
+        if (activeDocContent) {
+            logger.info(`[Chat] Received Active Doc Content. Length: ${activeDocContent.length} chars. Preview: ${activeDocContent.substring(0, 50)}...`);
+        } else {
+            logger.info(`[Chat] No Active Doc Content received.`);
+        }
+
         // PRIORITY 1: Chat-Uploaded Document
         if (activeDocContent && activeDocContent.length > 0) {
             logger.info("[Chat Routing] Using Active Chat Document (Priority 1). Skipping RAG.");
-            // Pass the document text directly. 
-            // We prepend a special marker text so GroqService knows it's a Chat Doc vs Company Doc?
-            // Actually GroqService just takes context. We can handle labeling here if we want, or just rely on context prompt.
-            // Let's rely on GroqService, but we need to tell it SOURCE via prompt?
-            // Simpler: Just rely on context.
-            // Wait, we need to label it "📄 From Chat-Uploaded Document". 
-            // GroqService logic uses "📄 From Your Document" generally. We might want to customize labeling.
-            // For now, let's just pass context. The generic "From Your Document" fits this use case well.
+
+            // TRUNCATION SAFEGUARD (UPDATED FOR FREE TIER)
+            const MAX_CONTEXT_CHARS = 20000;
+
+            if (activeDocContent.length > MAX_CONTEXT_CHARS) {
+                logger.warn(`[Chat] Document too large (${activeDocContent.length} chars). Truncating to ${MAX_CONTEXT_CHARS} to fit Groq Free Tier (6k TPM).`);
+                activeDocContent = activeDocContent.substring(0, MAX_CONTEXT_CHARS) + "\n...[TRUNCATED: UPGRADE GROQ PLAN FOR FULL DOC]...";
+            }
+
             return await groqService.askGroq(message, activeDocContent);
         }
 
@@ -113,10 +120,17 @@ exports.chat = async (message, activeDocContent = null) => {
             // Perform Similarity Search with Score
             const resultsWithScore = await vectorStore.similaritySearchWithScore(message, 4);
 
+            const vectorCollectionCount = await mongoose.connection.db.collection("knowledge_vectors").countDocuments();
+
             console.log("========== RAG DEBUG ==========");
             console.log("User Query:", message);
-            console.log("Total Documents in KB:", docCount);
-            console.log("Retrieved Chunks:", resultsWithScore.length);
+            console.log("Total Metadata Docs:", docCount);
+            console.log("Total Vector Chunks in DB:", vectorCollectionCount);
+            console.log("Similarity Chunks Returned:", resultsWithScore.length);
+
+            if (resultsWithScore.length === 0) {
+                console.log("⚠️ NO CHUNKS RETURNED. Check if MongoDB Atlas Vector Search Index 'default' is created on 'knowledge_vectors' collection.");
+            }
 
             resultsWithScore.forEach(([doc, score], index) => {
                 console.log(`--- Chunk ${index + 1} ---`);
@@ -126,8 +140,8 @@ exports.chat = async (message, activeDocContent = null) => {
             });
             console.log("================================");
 
-            // Threshold for "Relevance" (0.7 = High Similarity)
-            const THRESHOLD = 0.7;
+            // Threshold for "Relevance" (0.5 = Moderate, 0.7 = High)
+            const THRESHOLD = 0.5; // Lowered for debugging
             const relevantDocs = resultsWithScore.filter(([doc, score]) => {
                 logger.info(`[RAG Search] Doc Score: ${score.toFixed(4)} - Content: ${doc.pageContent.substring(0, 50)}...`);
                 return score >= THRESHOLD;
@@ -158,7 +172,8 @@ exports.chat = async (message, activeDocContent = null) => {
 
     } catch (error) {
         logger.error(`Chat Handling Error: ${error.message}`);
-        return "I'm having trouble connecting to my brain right now. Please try again later.";
+        // DEBUG: Return specific error to UI
+        return `Error: ${error.message}. (Check Backend Terminal for details)`;
     }
 };
 

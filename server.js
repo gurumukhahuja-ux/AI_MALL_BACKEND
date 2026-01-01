@@ -11,16 +11,13 @@ import cookieParser from "cookie-parser";
 import emailVatifiation from "./routes/emailVerification.js"
 import userRoute from './routes/user.js'
 
-import chatRoute from './routes/chat.routes.js';
-import knowledgeRoute from './routes/knowledge.routes.js';
+import reportRoutes from './routes/reportRoutes.js';
 import pdfRoutes from './routes/pdfRoutes.js';
 import aibizRoutes from './routes/aibizRoutes.js';
-// import fileUpload from 'express-fileupload';
-import * as aibaseService from './services/aibaseService.js';
-import reportRoutes from './routes/reportRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import revenueRoutes from './routes/revenueRoutes.js';
 import supportRoutes from './routes/supportRoutes.js';
+import aibaseApp from './aibase_module/app.js';
 
 
 dotenv.config();
@@ -29,7 +26,6 @@ const PORT = process.env.PORT
 // Connect to Database
 connectDB().then(() => {
   console.log("Database connected, initializing services...");
-  aibaseService.initializeFromDB();
 });
 
 
@@ -37,9 +33,8 @@ connectDB().then(() => {
 
 app.use(cors());
 app.use(cookieParser())
-app.use(express.json());
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-// app.use(fileUpload()); // Removed to avoid conflict with Multer (New AIBASE)
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 app.get("/ping-top", (req, res) => {
   res.send("Top ping works");
@@ -59,8 +54,7 @@ app.use('/api', (req, res, next) => {
 
 
 // AIBASE Routes: /api/aibase/chat, /api/aibase/knowledge
-app.use('/api/aibase/chat', chatRoute);
-app.use('/api/aibase/knowledge', knowledgeRoute);
+app.use('/api/aibase', aibaseApp);
 
 //Get user Route
 app.use('/api/user', userRoute)
