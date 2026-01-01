@@ -1,6 +1,8 @@
 
 
 import fs from "fs";
+import os from "os";
+import path from "path";
 
 if (process.env.GOOGLE_CREDENTIALS_BASE64) {
   const decodedKey = Buffer.from(
@@ -8,9 +10,10 @@ if (process.env.GOOGLE_CREDENTIALS_BASE64) {
     "base64"
   ).toString("utf-8");
 
-  fs.writeFileSync("/tmp/gcp-key.json", decodedKey);
+  const tempKeyPath = path.join(os.tmpdir(), "gcp-key.json");
+  fs.writeFileSync(tempKeyPath, decodedKey);
 
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = "/tmp/gcp-key.json";
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = tempKeyPath;
 }
 
 
@@ -21,12 +24,18 @@ import {
   VertexAI
 } from '@google-cloud/vertexai';
 
-const project = process.env.GCP_PROJECT_ID;
+const project = process.env.GCP_PROJECT_ID || process.env.PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
 const location = 'us-central1';
-const textModel = 'gemini-2.5-pro';
-const visionModel = 'gemini-2.5-pro';
+const textModel = 'gemini-1.5-flash-001';
+const visionModel = 'gemini-1.5-flash-001';
 
-const vertexAI = new VertexAI({ project: project, location: location });
+if (!project) {
+    console.error("❌ Vertex AI Error: GCP_PROJECT_ID not found in environment variables.");
+} else {
+    console.log(`✅ Vertex AI initializing with Project ID: ${project}`);
+}
+
+export const vertexAI = new VertexAI({ project: project, location: location });
 
 // Instantiate Gemini models
 export const generativeModel = vertexAI.getGenerativeModel({
