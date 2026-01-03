@@ -91,7 +91,7 @@ exports.chat = async (message, activeDocContent = null) => {
         }
 
         // PRIORITY 1: Chat-Uploaded Document
-        if (activeDocContent && activeDocContent.length > 0) {
+        if (activeDocContent && activeDocContent.trim().length > 0) {
             logger.info("[Chat Routing] Using Active Chat Document (Priority 1). Skipping RAG.");
 
             // TRUNCATION SAFEGUARD (UPDATED FOR FREE TIER)
@@ -102,7 +102,10 @@ exports.chat = async (message, activeDocContent = null) => {
                 activeDocContent = activeDocContent.substring(0, MAX_CONTEXT_CHARS) + "\n...[TRUNCATED: UPGRADE GROQ PLAN FOR FULL DOC]...";
             }
 
-            return await groqService.askGroq(message, activeDocContent);
+            // Add explicit header for AI to recognize source
+            const labeledContext = `SOURCE: CHAT UPLOADED DOCUMENT\n\n${activeDocContent}`;
+
+            return await groqService.askGroq(message, labeledContext);
         }
 
         // PRIORITY 2: Company Knowledge Base (RAG)

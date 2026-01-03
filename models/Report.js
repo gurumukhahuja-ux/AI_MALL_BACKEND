@@ -8,8 +8,12 @@ const reportSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['bug', 'security', 'other'],
         required: true
+    },
+    targetId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Agent', // Assuming it refers to Agent or App
+        required: false
     },
     priority: {
         type: String,

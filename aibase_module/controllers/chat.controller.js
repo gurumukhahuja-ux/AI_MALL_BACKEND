@@ -5,9 +5,6 @@ const Conversation = require('../models/Conversation.model');
 // @desc    Chat with AI
 // @route   POST /api/chat
 // @access  Public (for now)
-// @desc    Chat with AI
-// @route   POST /api/chat
-// @access  Public (for now)
 exports.chat = async (req, res, next) => {
     try {
         const { message, conversationId, activeDocContent } = req.body;
@@ -121,7 +118,7 @@ exports.uploadAttachment = async (req, res, next) => {
         });
 
         // Return text so frontend can send it back as context
-        logger.info(`[Chat Upload] Success. Extracted Text Length: ${parsedText ? parsedText.length : 0} chars.`);
+        logger.info(`[Chat Upload] Success. Extracted Text Length: ${parsedText ? parsedText.length : 0} chars. Preview: ${parsedText ? parsedText.substring(0, 100).replace(/\n/g, ' ') : 'N/A'}`);
         res.status(200).json({
             success: true,
             data: {

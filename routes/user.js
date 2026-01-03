@@ -47,7 +47,7 @@ route.get("/all", verifyToken, async (req, res) => {
         // We'll trust the request or fetch the user to check role if strictly needed.
         // For now, let's fetch all users.
 
-        const users = await userModel.find({ role: 'user' })
+        const users = await userModel.find({})
             .populate('agents', 'agentName pricing')
             .select('-password');
 

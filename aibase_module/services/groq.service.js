@@ -14,40 +14,33 @@ class GroqService {
 
         const messages = [];
 
-        // Hybrid System Prompt
-        const systemPrompt = `You are a smart Knowledge Assistant.
+        // Build Combined System Prompt
+        let combinedSystemPrompt = `You are a smart Knowledge Assistant.
 
 INSTRUCTIONS:
-1. Analyze the provided CONTEXT.
+1. Analyze the provided CONTEXT carefully.
 2. If the Context starts with "SOURCE: COMPANY KNOWLEDGE BASE":
-   - Answer the question using this context.
-   - Start response with: "🏢 *From Company Documents*\n\n"
-3. If the Context contains text but NO special header (meaning it's a User Upload):
-   - Answer the question using this context.
-   - Start response with: "📄 *From Chat-Uploaded Document*\n\n"
-4. If NO Context is provided (or it's empty):
-   - Answer using general knowledge.
-   - Start response with: "🌐 *From General Knowledge*\n\n"
+   - Use that information to answer.
+   - You MUST start your response with exactly: "🏢 *From Company Documents*" followed by two newlines.
+3. If the Context starts with "SOURCE: CHAT UPLOADED DOCUMENT":
+   - Use that information to answer.
+   - You MUST start your response with exactly: "📄 *From Chat-Uploaded Document*" followed by two newlines.
+4. If NO Context is provided:
+   - Use your general knowledge.
+   - You MUST start your response with exactly: "🌐 *From General Knowledge*" followed by two newlines.
 
 Constraints:
-- Do not mix sources.
-- If the answer is not in the company/user document, say so explicitly.`;
+- Strictly follow the labeling rules above.
+- If a source is provided, do NOT say it is from General Knowledge.`;
 
-
-
+        if (context) {
+            combinedSystemPrompt += `\n\nCONTEXT:\n${context}`;
+        }
 
         messages.push({
             role: "system",
-            content: systemPrompt
+            content: combinedSystemPrompt
         });
-
-        // Add Context if available
-        if (context) {
-            messages.push({
-                role: "system",
-                content: `CONTEXT:\n${context}`
-            });
-        }
 
         messages.push({
             role: "user",
@@ -55,13 +48,17 @@ Constraints:
         });
 
         try {
-            logger.info(`Sending request to Groq API (Hybrid Mode)...`);
-            const response = await axios.post(this.baseUrl, {
+            const payload = {
                 model: "llama-3.1-8b-instant",
                 messages: messages,
-                temperature: 0.3, // Balanced for factual + creative
+                temperature: 0.3,
                 max_tokens: 1024
-            }, {
+            };
+
+            logger.info(`Sending request to Groq API. Context Length: ${context ? context.length : 0} chars.`);
+            // logger.debug(`Full Groq Payload: ${JSON.stringify(payload)}`); // Enable if needed
+
+            const response = await axios.post(this.baseUrl, payload, {
                 headers: {
                     'Authorization': `Bearer ${this.apiKey}`,
                     'Content-Type': 'application/json'

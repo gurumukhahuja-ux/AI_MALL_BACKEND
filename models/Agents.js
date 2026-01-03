@@ -50,8 +50,7 @@ const AgentSchema = new mongoose.Schema(
 
         category: {
             type: String,
-            required: true,
-            default: "general"
+            required: true
         },
 
         avatar: {
@@ -82,8 +81,8 @@ const AgentSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["Live", "Inactive", "Coming Soon", "active", "inactive"],
-            default: "Inactive"
+            enum: ["active", "inactive", "coming_soon"],
+            default: "active"
         },
 
         visibility: {
@@ -102,7 +101,7 @@ const AgentSchema = new mongoose.Schema(
             default: 0
         },
 
-        // Keep review workflow fields for admin approval system
+        // Fields required for the Admin Dashboard & Workflow
         reviewStatus: {
             type: String,
             enum: ['Draft', 'Pending Review', 'Approved', 'Rejected'],
@@ -124,15 +123,14 @@ const AgentSchema = new mongoose.Schema(
     }
 );
 
-// Auto-generate slug from agentName before saving
-AgentSchema.pre('save', function (next) {
-    if (this.isModified('agentName') && !this.slug) {
+// Auto-generate slug from agentName before validation
+AgentSchema.pre('validate', function () {
+    if (this.isModified('agentName') && !this.slug && this.agentName) {
         this.slug = this.agentName
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '');
     }
-    next();
 });
 
 export default mongoose.model("Agent", AgentSchema);

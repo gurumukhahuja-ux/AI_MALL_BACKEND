@@ -25,6 +25,8 @@ router.get('/', verifyToken, async (req, res) => {
 router.post('/submit', verifyToken, async (req, res) => {
     try {
         const { type, priority, description, targetId } = req.body;
+        console.log('[DEBUG SUBMIT REPORT] Body:', req.body);
+        console.log('[DEBUG SUBMIT REPORT] User:', req.user);
 
         const newReport = await Report.create({
             userId: req.user.id,
@@ -108,9 +110,14 @@ router.put('/:id/resolve', verifyToken, async (req, res) => {
         if (!report) return res.status(404).json({ error: 'Report not found' });
 
         // Notify the user who submitted the report
+        // Notify the user who submitted the report
+        const notificationMessage = resolutionNote
+            ? `Your report (ID: ${report._id.toString().substring(0, 8)}) status has been updated to: ${status}. Admin response: "${resolutionNote}"`
+            : `Your report (ID: ${report._id.toString().substring(0, 8)}) status has been updated to: ${status}`;
+
         await Notification.create({
             userId: report.userId,
-            message: `Your report (ID: ${report._id.toString().substring(0, 8)}) status has been updated to: ${status}`,
+            message: notificationMessage,
             type: status === 'resolved' ? 'success' : 'info',
             targetId: report._id
         });
