@@ -43,3 +43,32 @@ export const sendResetPasswordEmail = async (email, name, resetUrl) => {
   }
 }
 
+
+export const sendContactAdminEmail = async (adminEmail, vendorName, vendorEmail, subject, message) => {
+  try {
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2 style="color: #2563eb;">New Admin Support Inquiry</h2>
+        <p><strong>From:</strong> ${vendorName} (${vendorEmail})</p>
+        <p><strong>Subject:</strong> ${subject}</p>
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <p style="white-space: pre-wrap;">${message}</p>
+        </div>
+        <hr style="border: 1px solid #eee; margin: 20px 0;" />
+        <p style="font-size: 12px; color: #888;">This message was sent from the Vendor Dashboard.</p>
+      </div>
+    `;
+
+    const response = await resend.emails.send({
+      from: `AI-MALL System <${process.env.EMAIL}>`,
+      to: [adminEmail],
+      reply_to: vendorEmail,
+      subject: `[Vendor Support] ${subject}`,
+      html: htmlContent
+    });
+    console.log("Admin contact email sent:", response);
+  } catch (error) {
+    console.log('Admin contact email error:', error);
+  }
+}
+

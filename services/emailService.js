@@ -11,6 +11,12 @@ const EMAIL_CONFIG = {
 // Create transporter
 const createTransporter = () => {
     try {
+        // Validation: Don't create transporter with default/placeholder credentials
+        if (EMAIL_CONFIG.user === 'your-email@gmail.com' || EMAIL_CONFIG.password === 'your-app-password') {
+            console.warn('[EMAIL SERVICE] Default credentials detected. Email service disabled.');
+            return null;
+        }
+
         return nodemailer.createTransport({
             service: EMAIL_CONFIG.service,
             auth: {

@@ -7,7 +7,12 @@ const router = express.Router();
 // Get user notifications
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const notifications = await notificationModel.find({ userId: req.user.id })
+        const query = { userId: req.user.id };
+        if (req.query.role) {
+            query.role = req.query.role;
+        }
+
+        const notifications = await notificationModel.find(query)
             .sort({ createdAt: -1 })
             .limit(20);
         res.json(notifications);
@@ -23,6 +28,19 @@ router.put('/:id/read', verifyToken, async (req, res) => {
             { _id: req.params.id, userId: req.user.id },
             { isRead: true }
         );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete notification
+router.delete('/:id', verifyToken, async (req, res) => {
+    try {
+        await notificationModel.findOneAndDelete({
+            _id: req.params.id,
+            userId: req.user.id
+        });
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });

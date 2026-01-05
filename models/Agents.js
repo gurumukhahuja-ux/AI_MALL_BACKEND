@@ -117,6 +117,11 @@ const AgentSchema = new mongoose.Schema(
         owner: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User'
+        },
+
+        isDeleted: {
+            type: Boolean,
+            default: false
         }
     },
     {
@@ -124,15 +129,5 @@ const AgentSchema = new mongoose.Schema(
     }
 );
 
-// Auto-generate slug from agentName before saving
-AgentSchema.pre('save', function (next) {
-    if (this.isModified('agentName') && !this.slug) {
-        this.slug = this.agentName
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-    }
-    next();
-});
 
 export default mongoose.model("Agent", AgentSchema);

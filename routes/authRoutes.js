@@ -187,4 +187,23 @@ router.post("/reset-password/:token", async (req, res) => {
   }
 });
 
+// ====================== GET ADMIN CONTACT =======================
+router.get("/admin-contact", async (req, res) => {
+  try {
+    // specific admin email logic: "dekho abhi mai admin hu but kalm ko koi or hogqa"
+    // Find the first admin user
+    const admin = await UserModel.findOne({ role: 'admin' }).select('email name');
+
+    if (admin) {
+      res.json({ email: admin.email, name: admin.name });
+    } else {
+      // Fallback
+      res.json({ email: 'admin@aimall.com', name: 'Admin Team' });
+    }
+  } catch (err) {
+    console.error("Fetch Admin Contact Error:", err);
+    res.status(500).json({ error: "Failed to fetch admin contact" });
+  }
+});
+
 export default router;

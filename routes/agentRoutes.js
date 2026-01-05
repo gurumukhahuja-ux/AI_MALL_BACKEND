@@ -8,35 +8,56 @@ const route = express.Router()
 
 //get all agents
 route.get("/", async (req, res) => {
-  const agents = await agentModel.find()
-  res.status(200).json(agents)
+  try {
+    const agents = await agentModel.find({ status: { $in: ['Live', 'active', 'Active'] } })
+    res.status(200).json(agents)
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 })
 
 //create agents
 route.post('/', verifyToken, async (req, res) => {
   try {
-    const { agentName, description, category, avatar, url, pricing } = req.body;
-    const newAgent = await agentModel.create({
+    const { agentName, description, category, avatar, url, pricingModel, pricingConfig } = req.body;
+
+    // Construct pricing object
+    const pricingData = {
+      type: pricingModel || 'free',
+      plans: pricingConfig?.selectedPlans || []
+    };
+
+    // Generate Slug explicitly
+    const baseSlug = agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const uniqueSuffix = Date.now().toString(36);
+    const slug = `${baseSlug}-${uniqueSuffix}`;
+
+    // Prepare agent data
+    const agentData = {
       agentName,
+      slug, // Explicitly set slug
       description,
       category,
-      avatar,
+      // If avatar is provided, use it; otherwise let Mongoose default handle it (by not including it if it's null/empty)
+      ...(avatar && { avatar }),
       url,
-      url,
-      pricing: { type: pricing },
+      pricing: pricingData,
       status: 'Inactive',
       reviewStatus: 'Draft',
       owner: req.user.id
-    });
+    };
+
+    const newAgent = await agentModel.create(agentData);
 
     // Agent created successfully
-    // Note: We do NOT auto-subscribe the creator to their own app in 'agents' list.
-    // The creator manages it via Vendor Dashboard.
-
     res.status(201).json(newAgent);
   } catch (err) {
-    console.error('[AGENT CREATE ERROR]', err);
-    res.status(400).json({ error: 'Failed to create agent' });
+    console.error('[AGENT CREATE ERROR] Details:', err);
+    console.error('[AGENT CREATE ERROR] Body Keys:', Object.keys(req.body));
+    if (err.errors) {
+      console.error('[AGENT CREATE ERROR] Mongoose Errors:', JSON.stringify(err.errors, null, 2));
+    }
+    res.status(400).json({ error: 'Failed to create app', details: err.message, validation: err.errors });
   }
 });
 
@@ -113,6 +134,24 @@ route.post('/buy/:id', async (req, res) => {
         netAmount,
         status: 'Success'
       });
+
+      // 1. Notify Buyer (User)
+      await notificationModel.create({
+        userId: userId,
+        message: `Subscription Active: You have successfully subscribed to '${agent.agentName}'. Enjoy your new AI tool!`,
+        type: 'success',
+        role: 'user',
+        targetId: agent._id
+      });
+
+      // 2. Notify Vendor
+      await notificationModel.create({
+        userId: agent.owner,
+        message: `New Subscriber: A user has subscribed to '${agent.agentName}'.`,
+        type: 'success',
+        role: 'vendor',
+        targetId: agent._id
+      });
     }
 
     res.status(200).json({
@@ -156,7 +195,7 @@ route.get("/me", verifyToken, async (req, res) => {
 // Get agents created by me (Vendor)
 route.get('/created-by-me', verifyToken, async (req, res) => {
   try {
-    const agents = await agentModel.find({ owner: req.user.id });
+    const agents = await agentModel.find({ owner: req.user.id, isDeleted: { $ne: true } });
     res.json(agents);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -173,18 +212,32 @@ route.post('/submit-review/:id', verifyToken, async (req, res) => {
     );
     if (!agent) return res.status(404).json({ error: "Agent not found" });
 
-    // Notify Admin
-    // Find an admin user (assuming role 'admin' exists)
-    // In a real app, you might notify all admins or a specific group.
-    const admin = await userModel.findOne({ role: 'admin' });
-    if (admin) {
-      await notificationModel.create({
+    // 1. Notify Admins (Targeted, excluding the sender)
+    const admins = await userModel.find({ role: 'admin', _id: { $ne: req.user.id } });
+
+    // Get Vendor Name (Current User)
+    const vendor = await userModel.findById(req.user.id);
+    const vendorName = vendor ? vendor.name : 'a vendor';
+
+    if (admins.length > 0) {
+      const adminNotifications = admins.map(admin => ({
         userId: admin._id,
-        message: `New App Submission: "${agent.agentName}" by Vendor. Please review.`,
+        message: `New App Review Request: '${agent.agentName}' has been submitted by ${vendorName}.`,
         type: 'info',
+        role: 'admin',
         targetId: agent._id
-      });
+      }));
+      await notificationModel.insertMany(adminNotifications);
     }
+
+    // 2. Notify Vendor (Confirmation)
+    await notificationModel.create({
+      userId: req.user.id,
+      message: `Submission Received: '${agent.agentName}' is now under review. We will notify you once the admin completes the verification.`,
+      type: 'info',
+      role: 'vendor',
+      targetId: agent._id
+    });
 
     res.json(agent);
   } catch (err) {
@@ -195,24 +248,58 @@ route.post('/submit-review/:id', verifyToken, async (req, res) => {
 // Approve (Admin)
 route.post('/approve/:id', verifyToken, async (req, res) => {
   try {
+    // Check Admin Role
+    const adminUser = await userModel.findById(req.user.id);
+    if (adminUser?.role !== 'admin') {
+      return res.status(403).json({ error: "Access Denied. Admins only." });
+    }
+
+    const { message, avatar } = req.body;
+    const updateData = {
+      reviewStatus: 'Approved',
+      status: 'Live'
+    };
+
+    // If Admin uploaded an avatar, update it
+    if (avatar) {
+      updateData.avatar = avatar;
+    }
+
     const agent = await agentModel.findByIdAndUpdate(
       req.params.id,
-      { reviewStatus: 'Approved', status: 'Live', rejectionReason: '' },
+      updateData,
       { new: true }
     );
 
     if (agent && agent.owner) {
-      const message = req.body.message || `Your app "${agent.agentName}" has been approved and is now Live!`;
+      // 1. Notify Vendor
       await notificationModel.create({
         userId: agent.owner,
-        message,
+        message: `Time to celebrate! '${agent.agentName}' has been approved and is now live on the AI Mall Marketplace.${message ? ' Note: ' + message : ''}`,
         type: 'success',
+        role: 'vendor',
         targetId: agent._id
       });
+
+      // 2. Notify All Users (Marketplace Update)
+      // Broadcast to everyone (Admins, Vendors, Users) so they all see the new app
+      const allUsers = await userModel.find({}).select('_id');
+      const notifications = allUsers.map(u => ({
+        userId: u._id,
+        message: `New Arrival: '${agent.agentName}' is now available in the marketplace. Check it out!`,
+        type: 'info',
+        role: 'user',
+        targetId: agent._id
+      }));
+
+      if (notifications.length > 0) {
+        await notificationModel.insertMany(notifications);
+      }
     }
 
     res.json(agent);
   } catch (err) {
+    console.error('[APPROVE ERROR]', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -220,6 +307,12 @@ route.post('/approve/:id', verifyToken, async (req, res) => {
 // Reject (Admin)
 route.post('/reject/:id', verifyToken, async (req, res) => {
   try {
+    // Check Admin Role
+    const adminUser = await userModel.findById(req.user.id);
+    if (adminUser?.role !== 'admin') {
+      return res.status(403).json({ error: "Access Denied. Admins only." });
+    }
+
     const { reason } = req.body;
     const agent = await agentModel.findByIdAndUpdate(
       req.params.id,
@@ -228,10 +321,12 @@ route.post('/reject/:id', verifyToken, async (req, res) => {
     );
 
     if (agent && agent.owner) {
+      // Notify Vendor with Reason
       await notificationModel.create({
         userId: agent.owner,
-        message: `Your app "${agent.agentName}" was rejected. Reason: ${reason}`,
+        message: `Action Required: '${agent.agentName}' could not be approved. Reason: ${reason}. Please make changes and resubmit.`,
         type: 'error',
+        role: 'vendor',
         targetId: agent._id
       });
     }
@@ -243,6 +338,53 @@ route.post('/reject/:id', verifyToken, async (req, res) => {
 });
 
 // --- General CRUD ---
+
+// Get agent details with usage stats (for vendor dashboard)
+route.get('/:id/details', verifyToken, async (req, res) => {
+  try {
+    const agent = await agentModel.findById(req.params.id);
+    if (!agent) {
+      return res.status(404).json({ error: "Agent not found" });
+    }
+
+    // Get usage statistics from transactions
+    const transactions = await transactionModel.find({ agentId: req.params.id });
+
+    // Calculate plan-wise breakdown
+    const planCounts = {
+      free: 0,
+      basic: 0,
+      premium: 0
+    };
+
+    // Get unique users
+    const uniqueUsers = new Set();
+    transactions.forEach(t => {
+      uniqueUsers.add(t.buyerId?.toString());
+    });
+
+    // Convert to array format for frontend
+    const planBreakdown = [
+      { name: 'Free', users: planCounts.free },
+      { name: 'Basic', users: planCounts.basic },
+      { name: 'Pro', users: planCounts.premium }
+    ];
+
+    const usage = {
+      totalUsers: uniqueUsers.size,
+      planBreakdown,
+      recentActivity: [] // Can be populated with actual activity data
+    };
+
+    res.json({
+      agent,
+      usage
+    });
+  } catch (err) {
+    console.error('[AGENT DETAILS ERROR]', err);
+    res.status(500).json({ error: "Failed to fetch agent details" });
+  }
+});
 
 route.get('/:id', async (req, res) => {
   try {
@@ -268,23 +410,88 @@ route.put('/:id', verifyToken, async (req, res) => {
 
 route.delete('/:id', verifyToken, async (req, res) => {
   try {
-    // Soft delete: Mark as Inactive and reset reviewStatus to Draft
-    const agent = await agentModel.findByIdAndUpdate(
-      req.params.id,
-      {
-        status: 'Inactive',
-        reviewStatus: 'Draft'
-      },
-      { new: true }
-    );
-
+    // Verify Agent Exists
+    const agent = await agentModel.findById(req.params.id);
     if (!agent) {
       return res.status(404).json({ error: "Agent not found" });
     }
 
-    res.json({ message: "Agent marked as inactive", agent });
+    // Notify Subscribers (Safely) - Send BEFORE deleting
+    try {
+      const transactions = await transactionModel.find({ agentId: agent._id });
+      const uniqueBuyers = [...new Set(transactions.map(t => t.buyerId?.toString()))].filter(id => id);
+
+      const notifications = uniqueBuyers.map(userId => ({
+        userId,
+        message: `Important Update: '${agent.agentName}' has been removed from the marketplace. Your subscription will not renew.`,
+        type: 'alert',
+        role: 'user',
+        targetId: agent._id // Keep ID for reference even if agent is gone
+      }));
+
+      if (notifications.length > 0) {
+        await notificationModel.insertMany(notifications);
+      }
+    } catch (notifErr) {
+      console.error("Failed to send deletion notifications:", notifErr);
+    }
+
+    // Hard Delete from Database
+    await agentModel.findByIdAndDelete(req.params.id);
+
+    res.json({ message: "Agent permanently deleted", agentId: req.params.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Get vendor users (subscribers)
+route.get('/vendor-users/:vendorId', verifyToken, async (req, res) => {
+  try {
+    const { vendorId } = req.params;
+
+    // Verify ownership
+    if (req.user.id !== vendorId && req.user.role !== 'admin') {
+      return res.status(403).json({ error: "Access Denied" });
+    }
+
+    // 1. Get all agents owned by this vendor
+    const agents = await agentModel.find({ owner: vendorId }).select('_id agentName');
+    const agentIds = agents.map(a => a._id);
+
+    // 2. Find transactions for these agents
+    const transactions = await transactionModel.find({ agentId: { $in: agentIds } })
+      .populate('buyerId', 'name email')
+      .populate('agentId', 'agentName pricing');
+
+    // 3. Transform to user list
+    // Use a Map to ensure unique users per app if needed, or just list all subscriptions
+    // The UI shows a list, so let's list every active subscription. 
+    // If a user has multiple apps, show them multiple times or group? 
+    // The table has "App / Agent" column, so listing entries per subscription makes sense.
+
+    const userList = transactions.map(t => {
+      // Determine plan name based on amount or pricingType
+      // Simple logic for now based on amount
+      let plan = 'Free';
+      if (t.amount > 0) {
+        plan = t.amount > 50 ? 'Pro' : 'Basic'; // Example logic
+      }
+
+      return {
+        id: t.buyerId?._id || 'unknown',
+        name: t.buyerId?.name || 'Unknown User',
+        email: t.buyerId?.email || 'N/A',
+        app: t.agentId?.agentName || 'Unknown App',
+        plan: plan,
+        joinedAt: t.createdAt
+      };
+    }).filter(u => u.name !== 'Unknown User'); // Filter out invalid users
+
+    res.json(userList);
+  } catch (err) {
+    console.error('[VENDOR USERS ERROR]', err);
+    res.status(500).json({ error: "Failed to fetch vendor users" });
   }
 });
 
