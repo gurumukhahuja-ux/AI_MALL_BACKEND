@@ -45,7 +45,7 @@ export const sendAdminNotification = async (ticket) => {
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
                 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px 10px 0 0; text-align: center;">
-                    <h1 style="color: white; margin: 0;">AI-MALL Admin</h1>
+                    <h1 style="color: white; margin: 0;">A-Series Admin</h1>
                     <p style="color: #f0f0f0; margin: 5px 0 0 0;">New Support Ticket Received</p>
                 </div>
                 
@@ -71,7 +71,7 @@ export const sendAdminNotification = async (ticket) => {
                 </div>
                 
                 <div style="background: #f1f5f9; padding: 15px; border-radius: 0 0 10px 10px; text-align: center; color: #64748b; font-size: 12px;">
-                    <p style="margin: 0;">AI-MALL Platform - Admin Notifications</p>
+                    <p style="margin: 0;">A-Series Platform - Admin Notifications</p>
                     <p style="margin: 5px 0 0 0;">This is an automated notification. Please do not reply to this email.</p>
                 </div>
             </div>
@@ -99,11 +99,11 @@ export const sendVendorReply = async (vendorEmail, vendorName, message, ticketId
     const mailOptions = {
         from: EMAIL_CONFIG.user,
         to: vendorEmail,
-        subject: `✉️ Reply from AI-MALL Admin - Ticket #${ticketId.substring(18).toUpperCase()}`,
+        subject: `✉️ Reply from A-Series Admin - Ticket #${ticketId.substring(18).toUpperCase()}`,
         html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
                 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 10px 10px 0 0; text-align: center;">
-                    <h1 style="color: white; margin: 0;">AI-MALL</h1>
+                    <h1 style="color: white; margin: 0;">A-Series</h1>
                     <p style="color: #f0f0f0; margin: 5px 0 0 0;">Admin Response</p>
                 </div>
                 
@@ -125,7 +125,7 @@ export const sendVendorReply = async (vendorEmail, vendorName, message, ticketId
                 </div>
                 
                 <div style="background: #f1f5f9; padding: 15px; border-radius: 0 0 10px 10px; text-align: center; color: #64748b; font-size: 12px;">
-                    <p style="margin: 0;">AI-MALL Platform</p>
+                    <p style="margin: 0;">A-Series Platform</p>
                     <p style="margin: 5px 0 0 0;">Thank you for being a valued vendor!</p>
                 </div>
             </div>

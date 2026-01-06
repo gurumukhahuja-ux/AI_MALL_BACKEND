@@ -211,7 +211,7 @@ router.get('/invoice/:id', verifyToken, async (req, res) => {
 </head>
 <body>
     <div class="header">
-        <h1>AI-MALL</h1>
+        <h1>A-Series</h1>
         <p>Transaction Invoice</p>
     </div>
     
@@ -256,7 +256,7 @@ router.get('/invoice/:id', verifyToken, async (req, res) => {
     
     <div class="footer">
         <p>Thank you for your business!</p>
-        <p>AI-MALL - Your AI Marketplace</p>
+        <p>A-Series - Your AI Marketplace</p>
     </div>
 </body>
 </html>

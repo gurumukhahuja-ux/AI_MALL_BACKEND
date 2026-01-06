@@ -59,7 +59,9 @@ route.get("/all", verifyToken, async (req, res) => {
         ]);
 
         const spendMap = transactions.reduce((acc, curr) => {
-            acc[curr._id.toString()] = curr.totalSpent;
+            if (curr._id) {
+                acc[curr._id.toString()] = curr.totalSpent;
+            }
             return acc;
         }, {});
 
@@ -70,6 +72,7 @@ route.get("/all", verifyToken, async (req, res) => {
             role: user.role,
             status: user.isVerified ? 'Active' : 'Pending',
             agents: user.agents || [],
+            avatar: user.avatar,
             spent: spendMap[user._id.toString()] || 0
         }));
 

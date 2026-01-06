@@ -5,6 +5,8 @@ import Agent from "../models/Agents.js";
 import Report from "../models/Report.js";
 import Transaction from "../models/Transaction.js";
 import Notification from "../models/Notification.js";
+import Settings from "../models/Settings.js";
+import { updateRateLimit } from "../middleware/dynamicRateLimiter.js";
 const router = express.Router();
 
 // Dashboard Stats
@@ -12,7 +14,7 @@ const router = express.Router();
 router.get('/dashboard/stats', async (req, res) => {
   try {
     const sessionCount = await ChatSession.countDocuments();
-    const liveAgentsCount = await Agent.countDocuments({ status: 'active' });
+    const liveAgentsCount = await Agent.countDocuments({ status: { $in: ['Live', 'active', 'Active'] } });
 
     res.json({
       totalChats: sessionCount,
@@ -42,7 +44,7 @@ router.get('/admin/stats', async (req, res) => {
     ] = await Promise.all([
       User.countDocuments(),
       Agent.find(),
-      Agent.countDocuments({ status: 'active' }),
+      Agent.countDocuments({ status: { $in: ['Live', 'active', 'Active'] } }),
       Agent.countDocuments({ reviewStatus: 'Pending Review' }),
       Report.countDocuments({ status: 'open' }),
       Agent.find().sort({ createdAt: -1 }).limit(3),
@@ -144,37 +146,51 @@ router.post('/automations/:id/toggle', (req, res) => {
   }
 });
 
-// Admin Settings (Mock Data)
-let adminSettings = {
-  allowPublicSignup: true,
-  defaultModel: 'gemini-2.5-flash',
-  maxTokensPerUser: 1000000,
-  organizationName: 'My Tech Corp'
-};
-
-router.get('/admin/settings', (req, res) => {
-  res.json(adminSettings);
+// Admin Settings
+router.get('/admin/settings', async (req, res) => {
+  try {
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = await Settings.create({});
+    }
+    res.json(settings);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch settings' });
+  }
 });
 
-// ... existing imports ...
-
-// Add POST /admin/settings/maintenance
 router.post('/admin/settings/maintenance', async (req, res) => {
   try {
     const { enabled } = req.body;
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = await Settings.create({});
+    }
 
-    // Update setting
-    adminSettings.maintenanceMode = enabled;
+    settings.maintenanceMode = enabled;
+    await settings.save();
 
-    // Broadcast notification if enabled
     if (enabled) {
+      // Notify ALL users
       const users = await User.find({}, '_id');
       const notifications = users.map(user => ({
         userId: user._id,
-        message: "The system is currently in maintenance mode. Some features may be unavailable.",
-        type: 'system',
-        read: false,
-        timestamp: new Date()
+        message: "⚠️ System Maintenance: The platform is currently in maintenance mode. Some features may be unavailable.",
+        type: "warning",
+        targetId: null
+      }));
+
+      if (notifications.length > 0) {
+        await Notification.insertMany(notifications);
+      }
+    } else {
+      // Notify ALL users system is back
+      const users = await User.find({}, '_id');
+      const notifications = users.map(user => ({
+        userId: user._id,
+        message: "✅ System Restored: Maintenance is complete. All systems are operational.",
+        type: "success",
+        targetId: null
       }));
 
       if (notifications.length > 0) {
@@ -182,16 +198,63 @@ router.post('/admin/settings/maintenance', async (req, res) => {
       }
     }
 
-    res.json({ success: true, maintenanceMode: enabled, message: enabled ? "Maintenance mode enabled and users notified." : "Maintenance mode disabled." });
-  } catch (error) {
-    console.error("Maintenance toggle error:", error);
-    res.status(500).json({ error: "Failed to update maintenance mode" });
+    res.json(settings);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update maintenance mode' });
   }
 });
 
-router.post('/admin/settings', (req, res) => {
-  adminSettings = { ...adminSettings, ...req.body };
-  res.json(adminSettings);
+// Toggle Kill Switch
+router.post('/admin/settings/killswitch', async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    let settings = await Settings.findOne();
+    if (!settings) settings = await Settings.create({});
+
+    settings.globalKillSwitch = enabled;
+    await settings.save();
+
+    res.json({ success: true, globalKillSwitch: enabled });
+  } catch (err) {
+    console.error("Kill switch toggle error:", err);
+    res.status(500).json({ error: "Failed to update kill switch" });
+  }
+});
+
+// Update Rate Limit
+router.post('/admin/settings/ratelimit', async (req, res) => {
+  try {
+    const { limit } = req.body;
+    let settings = await Settings.findOne();
+    if (!settings) settings = await Settings.create({});
+
+    settings.globalRateLimit = limit;
+    await settings.save();
+
+    // Update active memory limit immediately
+    updateRateLimit(limit);
+
+    res.json({ success: true, globalRateLimit: limit });
+  } catch (err) {
+    console.error("Rate limit update error:", err);
+    res.status(500).json({ error: "Failed to update rate limit" });
+  }
+});
+
+router.post('/admin/settings', async (req, res) => {
+  try {
+    let settings = await Settings.findOne();
+    if (!settings) {
+      settings = await Settings.create(req.body);
+    } else {
+      Object.assign(settings, req.body);
+      await settings.save();
+    }
+    res.json(settings);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
 });
 
 export default router;

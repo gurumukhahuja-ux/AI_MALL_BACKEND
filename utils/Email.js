@@ -6,7 +6,7 @@ import { marketPlace } from "../consts.js";
 export const sendVerificationEmail = async (email, name, verificationCode) => {
   try {
     const response = await resend.emails.send({
-      from: `AI-MALL <${process.env.EMAIL}>`,
+      from: `A-Series <${process.env.EMAIL}>`,
       to: [email],
       subject: "Verify Your Email",
       html: Verification_Email_Template.replace("{name}", name).replace("{verificationCode}", verificationCode)
@@ -21,7 +21,7 @@ export const sendVerificationEmail = async (email, name, verificationCode) => {
 // WELCOME EMAIL
 export const welcomeEmail = async (name, email) => {
   const info = await resend.emails.send({
-    from: `AI-MALL <${process.env.EMAIL}>`,
+    from: `A-Series <${process.env.EMAIL}>`,
     to: [email],
     subject: `Welcome ${name}`,
     html: Welcome_Email_Template.replace("{name}", name).replace("{dashboardUrl}", marketPlace),
@@ -32,7 +32,7 @@ export const welcomeEmail = async (name, email) => {
 export const sendResetPasswordEmail = async (email, name, resetUrl) => {
   try {
     const response = await resend.emails.send({
-      from: `AI-MALL <${process.env.EMAIL}>`,
+      from: `A-Series <${process.env.EMAIL}>`,
       to: [email],
       subject: "Reset Your Password",
       html: Reset_Password_Email_Template.replace("{name}", name).replace("{resetUrl}", resetUrl)
@@ -60,7 +60,7 @@ export const sendContactAdminEmail = async (adminEmail, vendorName, vendorEmail,
     `;
 
     const response = await resend.emails.send({
-      from: `AI-MALL System <${process.env.EMAIL}>`,
+      from: `A-Series System <${process.env.EMAIL}>`,
       to: [adminEmail],
       reply_to: vendorEmail,
       subject: `[Vendor Support] ${subject}`,

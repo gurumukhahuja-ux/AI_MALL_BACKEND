@@ -109,6 +109,12 @@ const AgentSchema = new mongoose.Schema(
             default: 'Draft'
         },
 
+        deletionStatus: {
+            type: String,
+            enum: ['None', 'Pending'],
+            default: 'None'
+        },
+
         rejectionReason: {
             type: String,
             default: ''
