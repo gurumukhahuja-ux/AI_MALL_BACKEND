@@ -50,7 +50,8 @@ const AgentSchema = new mongoose.Schema(
 
         category: {
             type: String,
-            required: true
+            required: true,
+            default: "general"
         },
 
         avatar: {
@@ -81,8 +82,8 @@ const AgentSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["active", "inactive", "coming_soon"],
-            default: "active"
+            enum: ["Live", "Inactive", "Coming Soon", "active", "inactive"],
+            default: "Inactive"
         },
 
         visibility: {
@@ -93,7 +94,7 @@ const AgentSchema = new mongoose.Schema(
 
         rating: {
             type: Number,
-            default: null
+            default: 0
         },
 
         usageCount: {
@@ -101,11 +102,17 @@ const AgentSchema = new mongoose.Schema(
             default: 0
         },
 
-        // Fields required for the Admin Dashboard & Workflow
+        // Keep review workflow fields for admin approval system
         reviewStatus: {
             type: String,
             enum: ['Draft', 'Pending Review', 'Approved', 'Rejected'],
             default: 'Draft'
+        },
+
+        deletionStatus: {
+            type: String,
+            enum: ['None', 'Pending'],
+            default: 'None'
         },
 
         rejectionReason: {
@@ -116,6 +123,11 @@ const AgentSchema = new mongoose.Schema(
         owner: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User'
+        },
+
+        isDeleted: {
+            type: Boolean,
+            default: false
         }
     },
     {
@@ -123,14 +135,5 @@ const AgentSchema = new mongoose.Schema(
     }
 );
 
-// Auto-generate slug from agentName before validation
-AgentSchema.pre('validate', function () {
-    if (this.isModified('agentName') && !this.slug && this.agentName) {
-        this.slug = this.agentName
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-    }
-});
 
 export default mongoose.model("Agent", AgentSchema);

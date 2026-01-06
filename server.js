@@ -49,6 +49,10 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+import { dynamicRateLimiter } from "./middleware/dynamicRateLimiter.js";
+// Apply Rate Limiter to all API routes
+app.use('/api', dynamicRateLimiter);
+
 // Mount Routes
 // AIBASE Routes: /api/aibase/chat, /api/aibase/knowledge
 
@@ -100,5 +104,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`AI-Mall Backend running on  http://localhost:${PORT}`);
+  console.log(`A-Series Backend running on  http://localhost:${PORT}`);
 });

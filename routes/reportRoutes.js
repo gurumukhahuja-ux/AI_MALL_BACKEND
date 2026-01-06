@@ -129,4 +129,21 @@ router.put('/:id/resolve', verifyToken, async (req, res) => {
     }
 });
 
+// DELETE /api/reports/:id (Admin only - delete report)
+router.delete('/:id', verifyToken, async (req, res) => {
+    try {
+        const reportId = req.params.id;
+        const report = await Report.findByIdAndDelete(reportId);
+
+        if (!report) {
+            return res.status(404).json({ error: 'Report not found' });
+        }
+
+        res.json({ message: 'Report deleted successfully' });
+    } catch (err) {
+        console.error('[DELETE REPORT ERROR]', err);
+        res.status(500).json({ error: 'Failed to delete report' });
+    }
+});
+
 export default router;

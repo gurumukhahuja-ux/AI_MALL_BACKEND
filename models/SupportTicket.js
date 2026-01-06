@@ -8,7 +8,11 @@ const supportTicketSchema = new mongoose.Schema({
     issueType: {
         type: String,
         required: true,
-        enum: ["General Inquiry", "Payment Issue", "Refund Request", "Technical Support", "Account Access", "Other"],
+        enum: ["General Inquiry", "Payment Issue", "Refund Request", "Technical Support", "Account Access", "Other", "AdminSupport"],
+    },
+    subject: {
+        type: String,
+        required: false
     },
     message: {
         type: String,

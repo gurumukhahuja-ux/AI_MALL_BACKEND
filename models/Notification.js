@@ -19,6 +19,11 @@ const notificationSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    role: {
+        type: String,
+        enum: ['user', 'vendor', 'admin'],
+        default: 'user'
+    },
     targetId: {
         type: mongoose.Schema.Types.ObjectId,
         required: false
