@@ -27,9 +27,9 @@ route.get("/", async (req, res) => {
         $in: permittedAgents.map(name => new RegExp(`^${name}$`, 'i'))
       };
     } else {
-      // Marketplace view - only show Live and Approved agents
-      filter.status = 'Live';
-      filter.reviewStatus = 'Approved';
+      // Marketplace view - show all agents regardless of status as requested
+      // filter.status = 'Live';
+      // filter.reviewStatus = 'Approved';
     }
 
     // Build query with sorting (newest first)
