@@ -4,8 +4,8 @@ import ChatSession from "../models/ChatSession.js"
 import { generativeModel } from "../config/gemini.js";
 import userModel from "../models/User.js";
 import { verifyToken } from "../middleware/authorization.js";
-import { checkKillSwitch } from "../middleware/checkKillSwitch.js";
 import { uploadToCloudinary } from "../services/cloudinary.service.js";
+import mammoth from "mammoth";
 
 
 
@@ -13,11 +13,6 @@ import { uploadToCloudinary } from "../services/cloudinary.service.js";
 
 
 const router = express.Router();
-
-// Apply Kill Switch to ALL chat routes (Inference)
-// TEMPORARILY DISABLED - causing 503 errors
-// router.use(checkKillSwitch);
-
 // Get all chat sessions (summary)
 router.post("/", async (req, res) => {
   const { content, history, systemInstruction, image, document } = req.body;
@@ -54,14 +49,27 @@ router.post("/", async (req, res) => {
       });
     }
 
-    // Handle Document Attachment (PDF)
+    // Handle Document Attachment
     if (document && document.base64Data) {
-      parts.push({
-        inlineData: {
-          data: document.base64Data,
-          mimeType: 'application/pdf'
+      if (document.mimeType === 'application/pdf') {
+        parts.push({
+          inlineData: {
+            data: document.base64Data,
+            mimeType: 'application/pdf'
+          }
+        });
+      } else if (document.mimeType.includes('word') || document.mimeType.includes('document')) {
+        // Extract text for DOCX
+        try {
+          const buffer = Buffer.from(document.base64Data, 'base64');
+          const result = await mammoth.extractRawText({ buffer });
+          const text = result.value;
+          parts.push({ text: `[Attached Document Content]:\n${text}` });
+        } catch (e) {
+          console.error("Docx extraction failed", e);
+          parts.push({ text: `[Error reading attached document: ${e.message}]` });
         }
-      });
+      }
     }
 
 
