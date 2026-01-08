@@ -89,7 +89,6 @@ app.use('/api/reports', reportRoutes);
 
 // Notification Routes
 app.use('/api/notifications', notificationRoutes);
-
 // Revenue Routes
 app.use('/api/revenue', revenueRoutes);
 
