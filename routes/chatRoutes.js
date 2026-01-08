@@ -4,21 +4,18 @@ import ChatSession from "../models/ChatSession.js"
 import { generativeModel } from "../config/gemini.js";
 import userModel from "../models/User.js";
 import { verifyToken } from "../middleware/authorization.js";
-import { checkKillSwitch } from "../middleware/checkKillSwitch.js";
+import { uploadToCloudinary } from "../services/cloudinary.service.js";
+import mammoth from "mammoth";
+
 
 
 
 
 
 const router = express.Router();
-
-// Apply Kill Switch to ALL chat routes (Inference)
-// TEMPORARILY DISABLED - causing 503 errors
-// router.use(checkKillSwitch);
-
 // Get all chat sessions (summary)
 router.post("/", async (req, res) => {
-  const { content, history, systemInstruction } = req.body;
+  const { content, history, systemInstruction, image, document } = req.body;
 
   try {
     // Construct parts from history + current message
@@ -41,6 +38,40 @@ router.post("/", async (req, res) => {
     // Add current message
     parts.push({ text: `User: ${content}` });
 
+    // Handle Image Attachment
+    // 'image' is already destructured from req.body above
+    if (image && image.mimeType && image.base64Data) {
+      parts.push({
+        inlineData: {
+          mimeType: image.mimeType,
+          data: image.base64Data
+        }
+      });
+    }
+
+    // Handle Document Attachment
+    if (document && document.base64Data) {
+      if (document.mimeType === 'application/pdf') {
+        parts.push({
+          inlineData: {
+            data: document.base64Data,
+            mimeType: 'application/pdf'
+          }
+        });
+      } else if (document.mimeType.includes('word') || document.mimeType.includes('document')) {
+        // Extract text for DOCX
+        try {
+          const buffer = Buffer.from(document.base64Data, 'base64');
+          const result = await mammoth.extractRawText({ buffer });
+          const text = result.value;
+          parts.push({ text: `[Attached Document Content]:\n${text}` });
+        } catch (e) {
+          console.error("Docx extraction failed", e);
+          parts.push({ text: `[Error reading attached document: ${e.message}]` });
+        }
+      }
+    }
+
 
     // For Google Generative AI SDK, we pass the parts directly (or a prompt string) as the "contents".
     // It accepts an array of Content objects, or a simple string/array of parts.
@@ -52,15 +83,49 @@ router.post("/", async (req, res) => {
     // Construct valid Content object
     const contentPayload = { role: "user", parts: parts };
 
-    const streamingResult = await generativeModel.generateContentStream({ contents: [contentPayload] });
+    console.log("--- Gemini Payload ---");
+    console.log(JSON.stringify(contentPayload, null, 2).substring(0, 1000) + "...");
 
-    // Iterate stream if needed, or await full response
-    for await (const chunk of streamingResult.stream) {
-      // Just consuming stream to ensure completion
+    let reply = "";
+    let retryCount = 0;
+    const maxRetries = 3;
+
+    const attemptGeneration = async () => {
+      const streamingResult = await generativeModel.generateContentStream({ contents: [contentPayload] });
+      const response = await streamingResult.response;
+      console.log("--- Gemini Response ---");
+      console.log(JSON.stringify(response, null, 2));
+      return response.text();
+    };
+
+    while (retryCount < maxRetries) {
+      try {
+        reply = await attemptGeneration();
+        break; // Success!
+      } catch (err) {
+        if (err.status === 429 && retryCount < maxRetries - 1) {
+          retryCount++;
+          const waitTime = Math.pow(2, retryCount) * 1000; // Exponential backoff
+          console.log(`Quota reached. Retrying in ${waitTime}ms... (Attempt ${retryCount}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+
+        console.error("Gemini Response Error:", err);
+        // If we have candidates, try to extract helpful error info
+        if (err.response?.candidates && err.response.candidates.length > 0) {
+          const candidate = err.response.candidates[0];
+          reply = `[Blocked: ${candidate.finishReason}] ${candidate.safetyRatings?.map(r => `${r.category}:${r.probability}`).join(', ')}`;
+        } else {
+          throw err; // Re-throw if not a 429 or final attempt
+        }
+        break;
+      }
     }
 
-    const finalResponse = await streamingResult.response;
-    const reply = finalResponse.text();
+    if (!reply) {
+      reply = "I understood your request but couldn't generate a text response.";
+    }
 
     return res.status(200).json({ reply });
   } catch (err) {
@@ -86,7 +151,8 @@ Stack: ${err.stack}
       code: err.code,
       details: err.details || err.response?.data
     });
-    return res.status(500).json({ error: "AI failed to respond", details: err.message });
+    const statusCode = err.status || 500;
+    return res.status(statusCode).json({ error: "AI failed to respond", details: err.message });
   }
 });
 // Get all chat sessions (summary) for the authenticated user
@@ -134,6 +200,31 @@ router.post('/:sessionId/message', verifyToken, async (req, res) => {
 
     if (!message?.role || !message?.content) {
       return res.status(400).json({ error: 'Invalid message format' });
+    }
+
+    // Cloudinary Upload Logic for Attachments (Base64 -> Cloud URL)
+    // We must do this BEFORE saving to MongoDB to prevent big payloads in DB
+    if (message.attachment && message.attachment.url && message.attachment.url.startsWith('data:')) {
+      try {
+        const matches = message.attachment.url.match(/^data:(.+);base64,(.+)$/);
+        if (matches) {
+          const mimeType = matches[1];
+          const base64Data = matches[2];
+          const buffer = Buffer.from(base64Data, 'base64');
+
+          // Upload to Cloudinary
+          const uploadResult = await uploadToCloudinary(buffer, {
+            resource_type: 'auto',
+            folder: 'chat_attachments',
+            public_id: `chat_${sessionId}_${Date.now()}`
+          });
+
+          // Update message with Cloudinary URL
+          message.attachment.url = uploadResult.secure_url;
+        }
+      } catch (uploadError) {
+        console.error("Cloudinary upload failed, falling back to Base64 storage:", uploadError);
+      }
     }
 
     const session = await ChatSession.findOneAndUpdate(
