@@ -18,7 +18,7 @@ const genAI = new GoogleGenerativeAI(apiKey);
 
 async function testGemini() {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         console.log("\n🔍 Attempting to generate content...");
 

@@ -25,7 +25,7 @@ const app = express();
 const PORT = process.env.PORT
 // Connect to Database
 connectDB().then(() => {
-  console.log("Database connected, initializing services...");
+    console.log("Database connected, initializing services...");
 });
 
 
@@ -37,21 +37,17 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 app.get("/ping-top", (req, res) => {
-  res.send("Top ping works");
+    res.send("Top ping works");
 })
 
 app.get("/", (req, res) => {
-  res.send("All working")
+    res.send("All working")
 })
 // Debug middleware
 app.use('/api', (req, res, next) => {
-  console.log(`[API DEBUG] ${req.method} ${req.url}`);
-  next();
+    console.log(`[API DEBUG] ${req.method} ${req.url}`);
+    next();
 });
-
-import { dynamicRateLimiter } from "./middleware/dynamicRateLimiter.js";
-// Apply Rate Limiter to all API routes
-app.use('/api', dynamicRateLimiter);
 
 // Mount Routes
 // AIBASE Routes: /api/aibase/chat, /api/aibase/knowledge
@@ -89,19 +85,24 @@ app.use('/api/reports', reportRoutes);
 
 // Notification Routes
 app.use('/api/notifications', notificationRoutes);
+
 // Revenue Routes
 app.use('/api/revenue', revenueRoutes);
 
 // Support Routes
 app.use('/api/support', supportRoutes);
 
+// Speech Routes
+import speechRoutes from './routes/speechRoutes.js';
+app.use('/api/speech', speechRoutes);
+
 
 // Global Error Handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something went wrong!' });
 });
 
 app.listen(PORT, () => {
-  console.log(`A-Series Backend running on  http://localhost:${PORT}`);
+    console.log(`AI-Mall Backend running on  http://localhost:${PORT}`);
 });

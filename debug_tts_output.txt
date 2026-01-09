@@ -1,0 +1,21 @@
+Error Code: 16
+Error Message: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+Error Details: "Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project."
+Stack: Error: 16 UNAUTHENTICATED: Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-project.
+    at callErrorFromStatus (C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\@grpc\grpc-js\build\src\call.js:32:19)
+    at Object.onReceiveStatus (C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\@grpc\grpc-js\build\src\client.js:193:76)
+    at Object.onReceiveStatus (C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\@grpc\grpc-js\build\src\client-interceptors.js:367:141)
+    at Object.onReceiveStatus (C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\@grpc\grpc-js\build\src\client-interceptors.js:327:181)
+    at C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\@grpc\grpc-js\build\src\resolving-call.js:135:78
+    at process.processTicksAndRejections (node:internal/process/task_queues:84:11)
+for call at
+    at ServiceClientImpl.makeUnaryRequest (C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\@grpc\grpc-js\build\src\client.js:161:32)
+    at ServiceClientImpl.<anonymous> (C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\@grpc\grpc-js\build\src\make-client.js:105:19)
+    at C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\@google-cloud\text-to-speech\build\src\v1\text_to_speech_client.js:218:29
+    at C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\google-gax\build\src\normalCalls\timeout.js:44:16
+    at repeat (C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\google-gax\build\src\normalCalls\retries.js:114:25)
+    at C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\google-gax\build\src\normalCalls\retries.js:156:13
+    at OngoingCallPromise.call (C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\google-gax\build\src\call.js:70:27)
+    at NormalApiCaller.call (C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\google-gax\build\src\normalCalls\normalApiCaller.js:34:19)
+    at C:\Users\Intel\Desktop\work space\A-Series-Backend\node_modules\google-gax\build\src\createApiCall.js:110:30
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
