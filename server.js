@@ -22,7 +22,7 @@ import aibaseApp from './aibase_module/app.js';
 
 dotenv.config();
 const app = express();
-const PORT = process.env.PORT
+const PORT = process.env.PORT || 8080
 // Connect to Database
 connectDB().then(() => {
     console.log("Database connected, initializing services...");
